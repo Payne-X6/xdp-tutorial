@@ -33,11 +33,11 @@ struct vlan_hdr {
 #define VLAN_MAX_DEPTH 4
 #endif
 
-static __always_inline int proto_is_vlan(__u16 h_proto)
-{
-	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
-		  h_proto == bpf_htons(ETH_P_8021AD));
-}
+// static __always_inline int proto_is_vlan(__u16 h_proto)
+// {
+// 	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
+// 		  h_proto == bpf_htons(ETH_P_8021AD));
+// }
 
 /* Packet parsing helpers.
  *
@@ -48,68 +48,68 @@ static __always_inline int proto_is_vlan(__u16 h_proto)
  * (h_proto for Ethernet, nexthdr for IPv6), for ICMP it is the ICMP type field.
  * All return values are in host byte order.
  */
-static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
-					struct ethhdr **ethhdr)
-{
-	struct ethhdr *eth = nh->pos;
-	int hdrsize = sizeof(*eth);
-	struct vlan_hdr *vlh;
-	__u16 h_proto;
-	int i;
+// static __always_inline int parse_ethhdr(struct hdr_cursor *nh, void *data_end,
+// 					struct ethhdr **ethhdr)
+// {
+// 	struct ethhdr *eth = nh->pos;
+// 	int hdrsize = sizeof(*eth);
+// 	struct vlan_hdr *vlh;
+// 	__u16 h_proto;
+// 	int i;
 
-	/* Byte-count bounds check; check if current pointer + size of header
-	 * is after data_end.
-	 */
-	if (nh->pos + hdrsize > data_end)
-		return -1;
+// 	/* Byte-count bounds check; check if current pointer + size of header
+// 	 * is after data_end.
+// 	 */
+// 	if (nh->pos + hdrsize > data_end)
+// 		return -1;
 
-	nh->pos += hdrsize;
-	*ethhdr = eth;
-	vlh = nh->pos;
-	h_proto = eth->h_proto;
+// 	nh->pos += hdrsize;
+// 	*ethhdr = eth;
+// 	vlh = nh->pos;
+// 	h_proto = eth->h_proto;
 
-	/* Use loop unrolling to avoid the verifier restriction on loops;
-	 * support up to VLAN_MAX_DEPTH layers of VLAN encapsulation.
-	 */
-	#pragma unroll
-	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
-		if (!proto_is_vlan(h_proto))
-			break;
+// 	/* Use loop unrolling to avoid the verifier restriction on loops;
+// 	 * support up to VLAN_MAX_DEPTH layers of VLAN encapsulation.
+// 	 */
+// 	#pragma unroll
+// 	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
+// 		if (!proto_is_vlan(h_proto))
+// 			break;
 
-		if (vlh + 1 > data_end)
-			break;
+// 		if (vlh + 1 > data_end)
+// 			break;
 
-		h_proto = vlh->h_vlan_encapsulated_proto;
-		vlh++;
-	}
+// 		h_proto = vlh->h_vlan_encapsulated_proto;
+// 		vlh++;
+// 	}
 
-	nh->pos = vlh;
-	return h_proto; /* network-byte-order */
-}
+// 	nh->pos = vlh;
+// 	return h_proto; /* network-byte-order */
+// }
 /* Assignment 2: Implement and use this */
 /*static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 					void *data_end,
 					struct ipv6hdr **ip6hdr)
 {
 }*/
-static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
-					void *data_end,
-					struct ipv6hdr **ip6hdr)
-{
-	struct ipv6hdr *ip6h = nh->pos;
+// static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
+// 					void *data_end,
+// 					struct ipv6hdr **ip6hdr)
+// {
+// 	struct ipv6hdr *ip6h = nh->pos;
 
-	/* Pointer-arithmetic bounds check; pointer +1 points to after end of
-	 * thing being pointed to. We will be using this style in the remainder
-	 * of the tutorial.
-	 */
-	if (ip6h + 1 > data_end)
-		return -1;
+// 	/* Pointer-arithmetic bounds check; pointer +1 points to after end of
+// 	 * thing being pointed to. We will be using this style in the remainder
+// 	 * of the tutorial.
+// 	 */
+// 	if (ip6h + 1 > data_end)
+// 		return -1;
 
-	nh->pos = ip6h + 1;
-	*ip6hdr = ip6h;
+// 	nh->pos = ip6h + 1;
+// 	*ip6hdr = ip6h;
 
-	return ip6h->nexthdr;
-}
+// 	return ip6h->nexthdr;
+// }
 
 /* Assignment 3: Implement and use this */
 /*static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
@@ -118,66 +118,65 @@ static __always_inline int parse_ip6hdr(struct hdr_cursor *nh,
 {
 }*/
 
-static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
-					  void *data_end,
-					  struct icmp6hdr **icmp6hdr)
-{
-	struct icmp6hdr *icmp6h = nh->pos;
+// static __always_inline int parse_icmp6hdr(struct hdr_cursor *nh,
+// 					  void *data_end,
+// 					  struct icmp6hdr **icmp6hdr)
+// {
+// 	struct icmp6hdr *icmp6h = nh->pos;
 
-	if (icmp6h + 1 > data_end)
-		return -1;
+// 	if (icmp6h + 1 > data_end)
+// 		return -1;
 
-	nh->pos   = icmp6h + 1;
-	*icmp6hdr = icmp6h;
+// 	nh->pos   = icmp6h + 1;
+// 	*icmp6hdr = icmp6h;
 
-	return icmp6h->icmp6_type;
-}
+// 	return icmp6h->icmp6_type;
+// }
 
-static __always_inline int parse_iphdr(struct hdr_cursor *nh,
-				       void *data_end,
-				       struct iphdr **iphdr)
-{
-	struct iphdr *iph = nh->pos;
-	int hdrsize;
+// static __always_inline int parse_iphdr(struct hdr_cursor *nh,
+// 				       void *data_end,
+// 				       struct iphdr **iphdr)
+// {
+// 	struct iphdr *iph = nh->pos;
+// 	int hdrsize;
 
-	if (iph + 1 > data_end)
-		return -1;
+// 	if (iph + 1 > data_end)
+// 		return -1;
 
-	hdrsize = iph->ihl * 4;
+// 	hdrsize = iph->ihl * 4;
 
-	/* Variable-length IPv4 header, need to use byte-based arithmetic */
-	if (nh->pos + hdrsize > data_end)
-		return -1;
+// 	/* Variable-length IPv4 header, need to use byte-based arithmetic */
+// 	if (nh->pos + hdrsize > data_end)
+// 		return -1;
 
-	nh->pos += hdrsize;
-	*iphdr = iph;
+// 	nh->pos += hdrsize;
+// 	*iphdr = iph;
 
-	return iph->protocol;
-}
+// 	return iph->protocol;
+// }
 
-static __always_inline int parse_icmphdr(struct hdr_cursor *nh,
-					 void *data_end,
-					 struct icmphdr **icmphdr)
-{
-	struct icmphdr *icmph = nh->pos;
+// static __always_inline int parse_icmphdr(struct hdr_cursor *nh,
+// 					 void *data_end,
+// 					 struct icmphdr **icmphdr)
+// {
+// 	struct icmphdr *icmph = nh->pos;
 
-	if (icmph + 1 > data_end)
-		return -1;
+// 	if (icmph + 1 > data_end)
+// 		return -1;
 
-	nh->pos  = icmph + 1;
-	*icmphdr = icmph;
+// 	nh->pos  = icmph + 1;
+// 	*icmphdr = icmph;
 
-	return icmph->type;
-}
+// 	return icmph->type;
+// }
 
 
 SEC("xdp_packet_parser")
 int  xdp_parser_func(struct xdp_md *ctx)
 {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data = (void *)(long)ctx->data;
-	struct ethhdr *eth;
-
+	// void *data_end = (void *)(long)ctx->data_end;
+	// void *data = (void *)(long)ctx->data;
+	// struct ethhdr *eth;
 
 	/* Default action XDP_PASS, imply everything we couldn't parse, or that
 	 * we don't want to deal with, we just pass up the stack and let the
@@ -185,54 +184,54 @@ int  xdp_parser_func(struct xdp_md *ctx)
 	 */
 	__u32 action = XDP_PASS; /* Default action */
 
-        /* These keep track of the next header type and iterator pointer */
-	struct hdr_cursor nh;
-	int nh_type;
+    /* These keep track of the next header type and iterator pointer */
+// 	struct hdr_cursor nh;
+// 	int nh_type;
 
-	/* Start next header cursor position at data start */
-	nh.pos = data;
+// 	/* Start next header cursor position at data start */
+// 	nh.pos = data;
 
-	/* Packet parsing in steps: Get each header one at a time, aborting if
-	 * parsing fails. Each helper function does sanity checking (is the
-	 * header type in the packet correct?), and bounds checking.
-	 */
-	nh_type = parse_ethhdr(&nh, data_end, &eth);
+// 	/* Packet parsing in steps: Get each header one at a time, aborting if
+// 	 * parsing fails. Each helper function does sanity checking (is the
+// 	 * header type in the packet correct?), and bounds checking.
+// 	 */
+// 	nh_type = parse_ethhdr(&nh, data_end, &eth);
 
-	/* Assignment additions go below here */
-	struct ipv6hdr *ip6h;
-	if (nh_type == bpf_htons(ETH_P_IPV6)) {
+// 	/* Assignment additions go below here */
+// 	struct ipv6hdr *ip6h;
+// 	if (nh_type == bpf_htons(ETH_P_IPV6)) {
 
-		nh_type = parse_ip6hdr(&nh, data_end, &ip6h);
-		if (nh_type != IPPROTO_ICMPV6)
-                       goto out;
+// 		nh_type = parse_ip6hdr(&nh, data_end, &ip6h);
+// 		if (nh_type != IPPROTO_ICMPV6)
+// 			goto out;
 
-		struct icmp6hdr *icmp6h;
-		nh_type = parse_icmp6hdr(&nh, data_end, &icmp6h);
-		if (nh_type != ICMPV6_ECHO_REQUEST)
-			goto out;
+// 		struct icmp6hdr *icmp6h;
+// 		nh_type = parse_icmp6hdr(&nh, data_end, &icmp6h);
+// 		if (nh_type != ICMPV6_ECHO_REQUEST)
+// 			goto out;
 
-		if (bpf_ntohs(icmp6h->icmp6_sequence) % 2 == 0)
-                       action = XDP_DROP;
+// 		if (bpf_ntohs(icmp6h->icmp6_sequence) % 2 == 0)
+// 			action = XDP_DROP;
 
-	} else if (nh_type == bpf_htons(ETH_P_IP))  {
-               struct iphdr *iph;
-               struct icmphdr *icmph;
+// 	} else if (nh_type == bpf_htons(ETH_P_IP))  {
+// 		struct iphdr *iph;
+// 		struct icmphdr *icmph;
 
-               nh_type = parse_iphdr(&nh, data_end, &iph);
-               if (nh_type != IPPROTO_ICMP)
-                       goto out;
+// 		nh_type = parse_iphdr(&nh, data_end, &iph);
+// 		if (nh_type != IPPROTO_ICMP)
+// 			goto out;
 
-               nh_type = parse_icmphdr(&nh, data_end, &icmph);
-               if (nh_type != ICMP_ECHO)
-                       goto out;
+// 		nh_type = parse_icmphdr(&nh, data_end, &icmph);
+// 		if (nh_type != ICMP_ECHO)
+// 			goto out;
 
-               if (bpf_ntohs(icmph->un.echo.sequence) % 2 == 0)
-                       action = XDP_DROP;
-       } else {
-		/* means XDP abort */
-        	action = 0;
-       }
-out:
+// 		if (bpf_ntohs(icmph->un.echo.sequence) % 2 == 0)
+// 			action = XDP_DROP;
+// 	} else {
+// 		/* means XDP abort */
+// 		action = XDP_PASS;
+// 	}
+// out:
 	return xdp_stats_record_action(ctx, action); /* read via xdp_stats */
 }
 

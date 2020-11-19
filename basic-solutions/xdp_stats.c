@@ -59,7 +59,7 @@ struct record {
 };
 
 struct stats_record {
-	struct record stats[1 << 14];
+	struct record stats[MAX_RX_QUEUES];
 };
 
 static double calc_period(struct record *r, struct record *p)
@@ -77,7 +77,7 @@ static double calc_period(struct record *r, struct record *p)
 static void stats_print_header()
 {
 	/* Print stats "header" */
-	printf("%-12s\n", "inet, rxq");
+	printf("%-12s\n", "[inet, rxq]");
 }
 
 static void stats_print(struct stats_record *stats_rec,
@@ -93,13 +93,13 @@ static void stats_print(struct stats_record *stats_rec,
 	stats_print_header(); /* Print stats "header" */
 
 	/* Print for each XDP actions stats */
-	for (i = 0; i < 1 << 14; i++)
+	for (i = 0; i < MAX_RX_QUEUES; i++)
 	{
 		char *fmt = "%-12s %'11lld pkts (%'10.0f pps)"
 			" %'11lld Kbytes (%'6.0f Mbits/s)"
 			" period:%f\n";
 		char action[10];
-		snprintf(action, sizeof(action) - 1, "[%d, %d]", i >> 7, i % (1 << 7));
+		snprintf(action, sizeof(action) - 1, "[%d, %d]", 0, i);
 
 		rec  = &stats_rec->stats[i];
 		prev = &stats_prev->stats[i];
@@ -191,7 +191,7 @@ static void stats_collect(int map_fd, __u32 map_type,
 	/* Collect all XDP actions stats  */
 	__u32 key;
 
-	for (key = 0; key < 1<<14; key++) {
+	for (key = 0; key < MAX_RX_QUEUES; key++) {
 		map_collect(map_fd, map_type, key, &stats_rec->stats[key]);
 	}
 }
@@ -239,7 +239,7 @@ int main(int argc, char **argv)
 	const struct bpf_map_info map_expect = {
 		.key_size    = sizeof(__u32),
 		.value_size  = sizeof(struct datarec),
-		.max_entries = 1 << 14,
+		.max_entries = MAX_RX_QUEUES,
 	};
 	struct bpf_map_info info = { 0 };
 	char pin_dir[PATH_MAX];

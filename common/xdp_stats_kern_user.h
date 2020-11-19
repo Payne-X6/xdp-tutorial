@@ -12,8 +12,8 @@ struct datarec {
 	__u64 rx_bytes;
 };
 
-#ifndef XDP_ACTION_MAX
-#define XDP_ACTION_MAX (XDP_REDIRECT + 1)
+#ifndef MAX_RX_QUEUES
+#define MAX_RX_QUEUES 128
 #endif
 
 #endif /* __XDP_STATS_KERN_USER_H */

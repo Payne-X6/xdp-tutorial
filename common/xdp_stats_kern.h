@@ -17,17 +17,14 @@ struct bpf_map_def SEC("maps") xdp_stats_map = {
 	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size    = sizeof(__u32),
 	.value_size  = sizeof(struct datarec),
-	.max_entries = 1 << 14,
+	.max_entries = MAX_RX_QUEUES,
 };
 
 static __always_inline
 __u32 xdp_stats_record_action(struct xdp_md *ctx, __u32 action)
 {
-	if (action >= XDP_ACTION_MAX)
-		return XDP_ABORTED;
-	int key = (ctx->rx_queue_index & 0x7F) + ((ctx->ingress_ifindex & 0x7F) << 7);
-
 	/* Lookup in kernel BPF-side return pointer to actual data record */
+	int key = ctx->rx_queue_index % xdp_stats_map.max_entries;
 	struct datarec *rec = bpf_map_lookup_elem(&xdp_stats_map, &key);
 	if (!rec)
 		return XDP_ABORTED;

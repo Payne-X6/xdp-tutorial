@@ -13,7 +13,7 @@ static const char *__doc__ = "XDP stats program\n"
 #include <time.h>
 
 #include <bpf/bpf.h>
-/* Lesson#1: this prog does not need to #include <bpf/libbpf.h> as it only uses
+/* This prog does not need to #include <bpf/libbpf.h> as it only uses
  * the simple bpf-syscall wrappers, defined in libbpf #include<bpf/bpf.h>
  */
 

@@ -11,7 +11,7 @@ $ make
 
 ```
 $ cd xdp-tutorial/packet-route
-# ./xdp_loader -d <inet> -F - progsec xdp_packet_router [--auto-mode]
+# ./xdp_loader -d <inet> -F --progsec xdp_packet_router [--auto-mode]
 ```
 
 ## Collect stats

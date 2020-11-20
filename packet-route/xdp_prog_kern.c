@@ -45,7 +45,7 @@ static __always_inline int ip_decrease_ttl(struct iphdr *iph)
 
 /* Solution to packet03/assignment-4 */
 /* xdp_router is the name of the xdp program */
-SEC("xdp_router")
+SEC("xdp_packet_router")
 int xdp_router_func(struct xdp_md *ctx)
 {
 	/* this is the packet context*/

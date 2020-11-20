@@ -77,7 +77,7 @@ static double calc_period(struct record *r, struct record *p)
 static void stats_print_header()
 {
 	/* Print stats "header" */
-	printf("%-12s\n", "[inet, rxq]");
+	printf("%-12s\t%-16s\t%-12s\t%-18s\t%-12s\t%-12s\n", "inet rxq", "packets-total", "( packets-actual )", "bandwidth-total", "( bandwidth-actual )", "time-delta");
 }
 
 static void stats_print(size_t len, struct stats_record *stats_rec,
@@ -96,11 +96,11 @@ static void stats_print(size_t len, struct stats_record *stats_rec,
 	for (size_t it = 0; it < len; ++it) {
 		for (i = 0; i < MAX_RX_QUEUES; i++)
 		{
-			char *fmt = "%-12s %'11lld pkts (%'10.0f pps)"
-						" %'11lld Kbytes (%'6.0f Mbits/s)"
-						" period:%f\n";
-			char action[10];
-			snprintf(action, sizeof(action) - 1, "[%d, %d]", infos[it].ifindex, i);
+			char *fmt = "%-12s\t%'11lld pkts\t( %'10.0f pps )"
+						"\t%'11lld Kbytes\t( %'6.0f Mbits/s )"
+						"\tperiod: %f\n";
+			char action[12];
+			snprintf(action, sizeof(action) - 1, "%d %d", infos[it].ifindex, i);
 
 			rec  = &stats_rec[it].stats[i];
 			prev = &stats_prev[it].stats[i];

@@ -116,22 +116,21 @@ int main(int argc, char **argv)
 	unsigned char dest[ETH_ALEN];
 
 	struct config cfg = {
-		.ifindex   = -1,
 		.redirect_ifindex   = -1,
 	};
 
 	/* Cmdline options can change progsec */
 	parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
 
-	redirect_map = (cfg.ifindex > 0) && (cfg.redirect_ifindex > 0);
+	redirect_map = (cfg.devs->config.ifindex > 0) && (cfg.redirect_ifindex > 0);
 
-	if (cfg.redirect_ifindex > 0 && cfg.ifindex == -1) {
+	if (cfg.redirect_ifindex > 0 && cfg.devs->config.ifindex == -1) {
 		fprintf(stderr, "ERR: required option --dev missing\n\n");
 		usage(argv[0], __doc__, long_options, (argc == 1));
 		return EXIT_FAIL_OPTION;
 	}
 
-	len = snprintf(pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.ifname);
+	len = snprintf(pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.devs->config.ifname);
 	if (len < 0) {
 		fprintf(stderr, "ERR: creating pin dirname\n");
 		return EXIT_FAIL_OPTION;
@@ -159,7 +158,7 @@ int main(int argc, char **argv)
 		/* setup a virtual port for the static redirect */
 		i = 0;
 		bpf_map_update_elem(map_fd, &i, &cfg.redirect_ifindex, 0);
-		printf("redirect from ifnum=%d to ifnum=%d\n", cfg.ifindex, cfg.redirect_ifindex);
+		printf("redirect from ifnum=%d to ifnum=%d\n", cfg.devs->config.ifindex, cfg.redirect_ifindex);
 
 		/* Open the redirect_params map */
 		map_fd = open_bpf_map_file(pin_dir, "redirect_params", NULL);

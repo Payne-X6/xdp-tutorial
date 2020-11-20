@@ -76,7 +76,7 @@ int pin_maps_in_bpf_object(struct bpf_object *bpf_obj, struct config *cfg)
 	int err, len;
 
 	len = snprintf(map_filename, PATH_MAX, "%s/%s/%s",
-		       pin_basedir, cfg->ifname, map_name);
+		       pin_basedir, cfg->devs->config.ifname, map_name);
 	if (len < 0) {
 		fprintf(stderr, "ERR: creating map_name\n");
 		return EXIT_FAIL_OPTION;
@@ -113,7 +113,6 @@ int main(int argc, char **argv)
 
 	struct config cfg = {
 		.xdp_flags = XDP_FLAGS_UPDATE_IF_NOEXIST | XDP_FLAGS_DRV_MODE,
-		.ifindex   = -1,
 		.do_unload = false,
 	};
 	/* Set default BPF-ELF object file and BPF program name */
@@ -122,34 +121,43 @@ int main(int argc, char **argv)
 	parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
 
 	/* Required option */
-	if (cfg.ifindex == -1) {
+	if (cfg.devs == NULL) {
 		fprintf(stderr, "ERR: required option --dev missing\n\n");
 		usage(argv[0], __doc__, long_options, (argc == 1));
 		return EXIT_FAIL_OPTION;
 	}
+	if (device_list_len(cfg.devs) != 1) {
+		fprintf(stderr, "WARN: right now multiple devs has none effect (only first is set)\n\n");
+	}
+
 	if (cfg.do_unload) {
 		if (!cfg.reuse_maps) {
 		/* TODO: Miss unpin of maps on unload */
 		}
-		return xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
+		int ret = xdp_link_detach(cfg.devs->config.ifindex, cfg.xdp_flags, 0);
+		free_device_list(&cfg.devs);
+		return ret;
 	}
 
-	len = snprintf(cfg.pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.ifname);
+	len = snprintf(cfg.pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.devs->config.ifname);
 	if (len < 0) {
 		fprintf(stderr, "ERR: creating pin dirname\n");
+		free_device_list(&cfg.devs);
 		return EXIT_FAIL_OPTION;
 	}
 
 
 	bpf_obj = load_bpf_and_xdp_attach(&cfg);
-	if (!bpf_obj)
+	if (!bpf_obj) {
+		free_device_list(&cfg.devs);
 		return EXIT_FAIL_BPF;
+	}
 
 	if (verbose) {
 		printf("Success: Loaded BPF-object(%s) and used section(%s)\n",
 		       cfg.filename, cfg.progsec);
 		printf(" - XDP prog attached on device:%s(ifindex:%d)\n",
-		       cfg.ifname, cfg.ifindex);
+		       cfg.devs->config.ifname, cfg.devs->config.ifindex);
 	}
 
 	/* Use the --dev name as subdir for exporting/pinning maps */
@@ -157,9 +165,11 @@ int main(int argc, char **argv)
 		err = pin_maps_in_bpf_object(bpf_obj, &cfg);
 		if (err) {
 			fprintf(stderr, "ERR: pinning maps\n");
+			free_device_list(&cfg.devs);
 			return err;
 		}
 	}
 
+	free_device_list(&cfg.devs);
 	return EXIT_OK;
 }

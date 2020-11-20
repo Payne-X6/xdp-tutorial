@@ -243,7 +243,7 @@ struct bpf_object *load_bpf_and_xdp_attach(struct config *cfg)
 
 	/* If flags indicate hardware offload, supply ifindex */
 	if (cfg->xdp_flags & XDP_FLAGS_HW_MODE)
-		offload_ifindex = cfg->ifindex;
+		offload_ifindex = cfg->devs->config.ifindex;
 
 	/* Load the BPF-ELF object file and get back libbpf bpf_object */
 	if (cfg->reuse_maps)
@@ -286,7 +286,7 @@ struct bpf_object *load_bpf_and_xdp_attach(struct config *cfg)
 	 * is our select file-descriptor handle. Next step is attaching this FD
 	 * to a kernel hook point, in this case XDP net_device link-level hook.
 	 */
-	err = xdp_link_attach(cfg->ifindex, cfg->xdp_flags, prog_fd);
+	err = xdp_link_attach(cfg->devs->config.ifindex, cfg->xdp_flags, prog_fd);
 	if (err)
 		exit(err);
 

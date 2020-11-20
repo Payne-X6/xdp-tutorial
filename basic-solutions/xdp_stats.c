@@ -80,8 +80,8 @@ static void stats_print_header()
 	printf("%-12s\n", "[inet, rxq]");
 }
 
-static void stats_print(struct stats_record *stats_rec,
-			struct stats_record *stats_prev)
+static void stats_print(size_t len, struct stats_record *stats_rec,
+			struct stats_record *stats_prev, struct bpf_map_info *infos)
 {
 	struct record *rec, *prev;
 	__u64 packets, bytes;
@@ -93,33 +93,35 @@ static void stats_print(struct stats_record *stats_rec,
 	stats_print_header(); /* Print stats "header" */
 
 	/* Print for each XDP actions stats */
-	for (i = 0; i < MAX_RX_QUEUES; i++)
-	{
-		char *fmt = "%-12s %'11lld pkts (%'10.0f pps)"
-			" %'11lld Kbytes (%'6.0f Mbits/s)"
-			" period:%f\n";
-		char action[10];
-		snprintf(action, sizeof(action) - 1, "[%d, %d]", 0, i);
+	for (size_t it = 0; it < len; ++it) {
+		for (i = 0; i < MAX_RX_QUEUES; i++)
+		{
+			char *fmt = "%-12s %'11lld pkts (%'10.0f pps)"
+						" %'11lld Kbytes (%'6.0f Mbits/s)"
+						" period:%f\n";
+			char action[10];
+			snprintf(action, sizeof(action) - 1, "[%d, %d]", infos[it].ifindex, i);
 
-		rec  = &stats_rec->stats[i];
-		prev = &stats_prev->stats[i];
+			rec  = &stats_rec[it].stats[i];
+			prev = &stats_prev[it].stats[i];
 		
-		if(rec->total.rx_packets == 0)
-			continue;
+			if(rec->total.rx_packets == 0)
+				continue;
 		
-		period = calc_period(rec, prev);
-		if (period == 0)
+			period = calc_period(rec, prev);
+			if (period == 0)
 		       return;
 
-		packets = rec->total.rx_packets - prev->total.rx_packets;
-		pps     = packets / period;
+			packets = rec->total.rx_packets - prev->total.rx_packets;
+			pps     = packets / period;
 
-		bytes   = rec->total.rx_bytes   - prev->total.rx_bytes;
-		bps     = (bytes * 8)/ period / 1000000;
+			bytes   = rec->total.rx_bytes   - prev->total.rx_bytes;
+			bps     = (bytes * 8)/ period / 1000000;
 
-		printf(fmt, action, rec->total.rx_packets, pps,
-		       rec->total.rx_bytes / 1000 , bps,
-		       period);
+			printf(fmt, action, rec->total.rx_packets, pps,
+		    	   rec->total.rx_bytes / 1000 , bps,
+			       period);
+		}
 	}
 	printf("\n");
 }
@@ -196,41 +198,44 @@ static void stats_collect(int map_fd, __u32 map_type,
 	}
 }
 
-static int stats_poll(const char *pin_dir, int map_fd, __u32 id,
-		      __u32 map_type, int interval)
+#ifndef PATH_MAX
+#define PATH_MAX	4096
+#endif
+
+
+static int stats_poll(size_t devs_num, const char pin_dirs[devs_num][PATH_MAX], int *map_fds, struct bpf_map_info *infos, int interval)
 {
 	struct bpf_map_info info = {};
-	struct stats_record prev, record = { 0 };
+	struct stats_record prev[devs_num], record[devs_num];
+	memset(record, 0, sizeof(record));
 
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
 
 	/* Get initial reading quickly */
-	stats_collect(map_fd, map_type, &record);
+	for (size_t i = 0; i < devs_num; ++i) {
+		stats_collect(map_fds[i], infos[i].type, &record[i]);
+	}
 	usleep(1000000/4);
 
 	while (1) {
-		prev = record; /* struct copy */
-
-		map_fd = open_bpf_map_file(pin_dir, "xdp_stats_map", &info);
-		if (map_fd < 0) {
-			return EXIT_FAIL_BPF;
-		} else if (id != info.id) {
-			printf("BPF map xdp_stats_map changed its ID, restarting\n");
-			return 0;
+		for (size_t i = 0; i < devs_num; ++i) {
+			prev[i] = record[i]; /* struct copy */
+			map_fds[i] = open_bpf_map_file(pin_dirs[i], "xdp_stats_map", &info);
+			if (map_fds[i] < 0) {
+				return EXIT_FAIL_BPF;
+			} else if (infos[i].id != info.id) {
+				printf("BPF map xdp_stats_map changed its ID, restarting\n");
+				return 0;
+			}
+			stats_collect(map_fds[i], infos[i].type, &record[i]);
 		}
-
-		stats_collect(map_fd, map_type, &record);
-		stats_print(&record, &prev);
+		stats_print(devs_num, record, prev, infos);
 		sleep(interval);
 	}
 
 	return 0;
 }
-
-#ifndef PATH_MAX
-#define PATH_MAX	4096
-#endif
 
 const char *pin_basedir =  "/sys/fs/bpf";
 
@@ -241,59 +246,79 @@ int main(int argc, char **argv)
 		.value_size  = sizeof(struct datarec),
 		.max_entries = MAX_RX_QUEUES,
 	};
-	struct bpf_map_info info = { 0 };
-	char pin_dir[PATH_MAX];
-	int stats_map_fd;
 	int interval = 1;
 	int len, err;
 
 	struct config cfg = {
-		.ifindex   = -1,
 		.do_unload = false,
 	};
-
+	
 	/* Cmdline options can change progsec */
 	parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
 
 	/* Required option */
-	if (cfg.ifindex == -1) {
+	if (cfg.devs == NULL) {
 		fprintf(stderr, "ERR: required option --dev missing\n\n");
 		usage(argv[0], __doc__, long_options, (argc == 1));
 		return EXIT_FAIL_OPTION;
 	}
 
 	/* Use the --dev name as subdir for finding pinned maps */
-	len = snprintf(pin_dir, PATH_MAX, "%s/%s", pin_basedir, cfg.ifname);
-	if (len < 0) {
-		fprintf(stderr, "ERR: creating pin dirname\n");
-		return EXIT_FAIL_OPTION;
+	const size_t dev_len = device_list_len(cfg.devs);
+	struct bpf_map_info infos[dev_len];
+	memset(infos, 0, sizeof(infos));
+	char pin_dirs[dev_len][PATH_MAX];
+	int stats_map_fds[dev_len];
+
+	struct device_list *it = cfg.devs;
+	for (size_t i = 0; i < dev_len; ++i) {
+		if (it == NULL) {
+			break;
+		}
+		len = snprintf(pin_dirs[i], PATH_MAX, "%s/%s", pin_basedir, it->config.ifname);
+		if (len < 0) {
+			fprintf(stderr, "ERR: creating pin dirname\n");
+			free_device_list(&cfg.devs);
+			return EXIT_FAIL_OPTION;
+		}
+		it = it->next;
 	}
 
 	for ( ;; ) {
-		stats_map_fd = open_bpf_map_file(pin_dir, "xdp_stats_map", &info);
-		if (stats_map_fd < 0) {
-			return EXIT_FAIL_BPF;
+		for (size_t i = 0; i < dev_len; ++i) {
+			stats_map_fds[i] = open_bpf_map_file(pin_dirs[i], "xdp_stats_map", &infos[i]);
+			if (stats_map_fds[i] < 0) {
+				free_device_list(&cfg.devs);
+				return EXIT_FAIL_BPF;
+			}
+
+			/* check map info, e.g. datarec is expected size */
+			err = check_map_fd_info(&infos[i], &map_expect);
+			if (err) {
+				fprintf(stderr, "ERR: map via FD not compatible\n");
+				free_device_list(&cfg.devs);
+				return err;
+			}
 		}
 
-		/* check map info, e.g. datarec is expected size */
-		err = check_map_fd_info(&info, &map_expect);
-		if (err) {
-			fprintf(stderr, "ERR: map via FD not compatible\n");
-			return err;
-		}
-		if (verbose) {
-			printf("\nCollecting stats from BPF map\n");
-			printf(" - BPF map (bpf_map_type:%d) id:%d name:%s"
-			       " key_size:%d value_size:%d max_entries:%d\n",
-			       info.type, info.id, info.name,
-			       info.key_size, info.value_size, info.max_entries
-			       );
+		for (size_t i = 0; i < dev_len; ++i) {
+			if (verbose) {
+				printf("\nCollecting stats from BPF map\n");
+				printf(" - BPF map (bpf_map_type:%d) id:%d name:%s"
+				       " key_size:%d value_size:%d max_entries:%d\n",
+				       infos[i].type, infos[i].id, infos[i].name,
+			    	   infos[i].key_size, infos[i].value_size, infos[i].max_entries
+				       );
+			}
 		}
 
-		err = stats_poll(pin_dir, stats_map_fd, info.id, info.type, interval);
-		if (err < 0)
+		err = stats_poll(dev_len, pin_dirs, stats_map_fds, infos, interval);
+		if (err < 0) {
+			free_device_list(&cfg.devs);
 			return err;
+		}
 	}
 
+	free_device_list(&cfg.devs);
 	return EXIT_OK;
 }

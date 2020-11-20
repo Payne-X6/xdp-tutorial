@@ -5,11 +5,19 @@
 #include <linux/types.h>
 #include <stdbool.h>
 
-struct config {
-	__u32 xdp_flags;
+struct dev_conf {
 	int ifindex;
 	char *ifname;
 	char ifname_buf[IF_NAMESIZE];
+};
+
+struct device_list {
+	struct device_list *next;
+	struct dev_conf config;
+};
+
+struct config {
+	__u32 xdp_flags;
 	int redirect_ifindex;
 	char *redirect_ifname;
 	char redirect_ifname_buf[IF_NAMESIZE];
@@ -23,7 +31,9 @@ struct config {
 	__u16 xsk_bind_flags;
 	int xsk_if_queue;
 	bool xsk_poll_mode;
+	struct device_list *devs;
 };
+
 
 /* Defined in common_params.o */
 extern int verbose;

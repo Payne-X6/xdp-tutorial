@@ -16,6 +16,35 @@ int verbose = 1;
 
 #define BUFSIZE 30
 
+void free_device_list(struct device_list **list_head) {
+	if (list_head == NULL) {
+		return;
+	}
+	if (*list_head != NULL && (*list_head)->next != NULL) {
+	 	free_device_list(&(*list_head)->next);
+	}
+	free(*list_head);
+	*list_head = NULL;
+}
+
+void device_list_append(struct device_list **list_head, struct device_list *append) {
+	struct device_list **it = list_head;
+	while (*it != NULL) {
+		it = &(*it)->next;
+	}
+	*it = append;
+}
+
+size_t device_list_len(struct device_list *list_head) {
+	if (list_head == NULL) {
+		return 0;
+	}
+	if (list_head->next != NULL) {
+		return device_list_len(list_head->next) + 1;
+	}
+	return 1;
+}
+
 void _print_options(const struct option_wrapper *long_options, bool required)
 {
 	int i, pos;
@@ -85,6 +114,7 @@ void parse_cmdline_args(int argc, char **argv,
 	int longindex = 0;
 	char *dest;
 	int opt;
+	cfg->devs = NULL;
 
 	if (option_wrappers_to_options(options_wrapper, &long_options)) {
 		fprintf(stderr, "Unable to malloc()\n");
@@ -100,15 +130,19 @@ void parse_cmdline_args(int argc, char **argv,
 				fprintf(stderr, "ERR: --dev name too long\n");
 				goto error;
 			}
-			cfg->ifname = (char *)&cfg->ifname_buf;
-			strncpy(cfg->ifname, optarg, IF_NAMESIZE);
-			cfg->ifindex = if_nametoindex(cfg->ifname);
-			if (cfg->ifindex == 0) {
+			struct device_list *new_device = (struct device_list *)malloc(sizeof(struct device_list));
+			new_device->next = NULL;
+			new_device->config.ifname = (char *)&new_device->config.ifname_buf;
+			strncpy(new_device->config.ifname, optarg, IF_NAMESIZE);
+			new_device->config.ifindex = if_nametoindex(new_device->config.ifname);
+			if (new_device->config.ifindex == 0) {
 				fprintf(stderr,
 					"ERR: --dev name unknown err(%d):%s\n",
 					errno, strerror(errno));
+				free(new_device);
 				goto error;
 			}
+			device_list_append(&cfg->devs, new_device);
 			break;
 		case 'r':
 			if (strlen(optarg) >= IF_NAMESIZE) {
@@ -189,6 +223,7 @@ void parse_cmdline_args(int argc, char **argv,
 		error:
 		default:
 			usage(argv[0], doc, options_wrapper, full_help);
+			free_device_list(&cfg->devs);
 			free(long_options);
 			exit(EXIT_FAIL_OPTION);
 		}
